@@ -6,11 +6,11 @@ services:
       - "5000:5000"
     volumes:
       - ./backend:/app
-      - ./data/uploads:/app/data/uploads
-      - ./data/temp:/app/data/temp
-      - ./data/vectors:/app/data/vectors
-      - ./data/keys:/app/data/keys
-      - ./data/chroma_db:/app/data/chroma_db
+      - ./backend/data/uploads:/app/data/uploads
+      - ./backend/data/temp:/app/data/temp
+      - ./backend/data/vectors:/app/data/vectors
+      - ./backend/data/keys:/app/data/keys
+      - ./backend/data/chroma_db:/app/data/chroma_db
     environment:
       - EMBEDDING_PROVIDER=ollama
       - OLLAMA_URL=http://host.docker.internal:11434

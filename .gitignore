@@ -1,5 +1,6 @@
 # 忽略資料目錄
 /data/
+backend/data/
 
 # 忽略環境變數檔案
 .env
@@ -8,6 +9,7 @@
 
 # 忽略 Python 相關檔案
 __pycache__/
+backend/**/__pycache__/
 *.py[cod]
 *$py.class
 *.so

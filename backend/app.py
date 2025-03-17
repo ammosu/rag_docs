@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 檔案上傳配置
-DATA_DIR = '../data'  # 相對於 backend 目錄的路徑
+DATA_DIR = './data'  # 相對於 backend 目錄的路徑
 UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')
 TEMP_FOLDER = os.path.join(DATA_DIR, 'temp')
 VECTOR_FOLDER = os.path.join(DATA_DIR, 'vectors')
