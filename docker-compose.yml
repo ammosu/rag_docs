@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: ./backend
+    container_name: rag-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ./data/uploads:/app/data/uploads
+      - ./data/temp:/app/data/temp
+      - ./data/vectors:/app/data/vectors
+      - ./data/keys:/app/data/keys
+      - ./data/chroma_db:/app/data/chroma_db
+    environment:
+      - EMBEDDING_PROVIDER=ollama
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=jeffh/intfloat-multilingual-e5-large:f16
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    image: nginx:alpine
+    container_name: rag-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  data:

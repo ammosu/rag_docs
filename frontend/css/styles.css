@@ -1,0 +1,110 @@
+/* 基本風格覆蓋 */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* 動畫效果 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* 自定義卡片效果 */
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+/* 進度條自定義樣式 */
+.progress-bar-animated {
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
+}
+
+/* 搜尋結果樣式 */
+.search-result {
+    border-left: 4px solid #3B82F6;
+    transition: all 0.2s ease;
+}
+
+.search-result:hover {
+    border-left-color: #1E40AF;
+    background-color: #F3F4F6;
+}
+
+/* 按鈕禁用狀態樣式 */
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 文件項目樣式 */
+.document-item {
+    transition: background-color 0.2s ease;
+}
+
+.document-item:hover {
+    background-color: #F3F4F6;
+}
+
+/* 複製按鈕效果 */
+.copy-success {
+    background-color: #10B981 !important;
+}
+
+/* 金鑰顯示區域 */
+.key-display {
+    font-family: monospace;
+    word-break: break-all;
+}
+
+/* 提示訊息樣式 */
+.alert-enter {
+    transform: scale(0.9);
+    opacity: 0;
+}
+
+.alert-enter-active {
+    transform: scale(1);
+    opacity: 1;
+    transition: all 0.3s;
+}
+
+.alert-exit {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.alert-exit-active {
+    transform: scale(0.9);
+    opacity: 0;
+    transition: all 0.3s;
+}
+
+/* 響應式調整 */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .flex.space-x-2 {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .flex.space-x-2 > * {
+        margin-left: 0 !important;
+    }
+}
