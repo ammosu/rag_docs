@@ -69,26 +69,24 @@ git clone https://github.com/yourusername/rag-system.git
 cd rag-system
 ```
 
-2. 配置環境變數
+2. 執行設置腳本
 
-在 `backend` 目錄中創建 `.env` 文件，並配置以下變數：
+執行提供的設置腳本，它會自動創建必要的目錄結構和配置文件：
 
-```
-# 嵌入模型配置
-EMBEDDING_PROVIDER=ollama  # 可選: ollama, openai 等
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=jeffh/intfloat-multilingual-e5-large:f16
-
-# 如果使用 OpenAI 嵌入，需要設置
-# EMBEDDING_PROVIDER=openai
-# OPENAI_API_KEY=your_openai_api_key
-
-# 如果使用 Pinecone BYOK，需要設置
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_ENVIRONMENT=your_pinecone_environment
+```bash
+./setup.sh
 ```
 
-3. 構建和啟動容器
+這個腳本會：
+- 創建 `data` 目錄及其子目錄
+- 複製 `.env.example` 到 `.env`（如果尚未存在）
+- 設置適當的目錄權限
+
+3. 配置環境變數（可選）
+
+如果需要自定義配置，編輯 `backend/.env` 文件。預設配置使用 Ollama 作為嵌入提供者，如果需要使用其他提供者（如 OpenAI）或 Pinecone BYOK，請取消註釋相關配置並填入您的 API 金鑰。
+
+4. 構建和啟動容器
 
 ```bash
 docker-compose up -d
@@ -169,6 +167,12 @@ docker-compose up -d
 - 當前實現是概念驗證，未完全針對生產環境優化
 - 大文件處理可能需要較長時間
 - 嵌入實現目前使用模擬數據，實際部署需連接 OpenAI 或其他嵌入服務
+
+## 開發注意事項
+
+- 專案使用 `.gitignore` 配置，防止將運行時生成的資料目錄和環境變數文件提交到版本控制系統
+- 所有資料文件（上傳的文件、向量資料、資料庫文件等）都存儲在 `data` 目錄中，該目錄不會被 Git 追蹤
+- 開發時請確保創建並正確配置 `.env` 文件，可以參考 `.env.example` 模板
 
 ## 許可證
 

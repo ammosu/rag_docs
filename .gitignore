@@ -1,0 +1,47 @@
+# 忽略資料目錄
+/data/
+
+# 忽略環境變數檔案
+.env
+.env.*
+!.env.example
+
+# 忽略 Python 相關檔案
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 忽略 Docker 相關檔案
+.dockerignore
+
+# 忽略 IDE 相關檔案
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 忽略日誌檔案
+*.log
+logs/
+
+# 忽略暫存檔案
+.tmp/
+tmp/
