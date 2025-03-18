@@ -219,56 +219,219 @@ class ChromaVectorDB(VectorDB):
     
     def search(self, query_vector, filter_dict=None, top_k=5):
         # 在 Chroma 中搜索向量
-        results = self.collection.query(
-            query_embeddings=[query_vector],
-            n_results=top_k,
-            where=filter_dict
-        )
-        
-        # 格式化結果以匹配 Pinecone 的輸出格式
-        matches = []
-        if results and 'ids' in results and len(results['ids']) > 0:
-            for i in range(len(results['ids'][0])):
-                match = {
-                    'id': results['ids'][0][i],
-                    'score': results['distances'][0][i] if 'distances' in results else 0.0,
-                    'metadata': results['metadatas'][0][i] if 'metadatas' in results else {}
-                }
-                matches.append(match)
-        
-        return {"matches": matches}
+        try:
+            # Chroma 需要特定格式的 where 條件
+            chroma_where = {}
+            
+            if filter_dict:
+                # 處理 user_id
+                if 'user_id' in filter_dict:
+                    chroma_where["user_id"] = {"$eq": filter_dict["user_id"]}
+                
+                # 處理 document_id
+                if 'document_id' in filter_dict:
+                    chroma_where["document_id"] = {"$eq": filter_dict["document_id"]}
+                
+                # 處理 is_encrypted
+                if 'is_encrypted' in filter_dict:
+                    chroma_where["is_encrypted"] = {"$eq": filter_dict["is_encrypted"]}
+            
+            # 執行查詢
+            results = self.collection.query(
+                query_embeddings=[query_vector],
+                n_results=top_k,
+                where=chroma_where if chroma_where else None
+            )
+            
+            # 格式化結果以匹配 Pinecone 的輸出格式
+            matches = []
+            if results and 'ids' in results and len(results['ids']) > 0:
+                for i in range(len(results['ids'][0])):
+                    match = {
+                        'id': results['ids'][0][i],
+                        'score': results['distances'][0][i] if 'distances' in results else 0.0,
+                        'metadata': results['metadatas'][0][i] if 'metadatas' in results else {}
+                    }
+                    matches.append(match)
+            
+            return {"matches": matches}
+            
+        except Exception as e:
+            logger.error(f"Chroma 搜索時出錯: {str(e)}")
+            # 返回空結果
+            return {"matches": []}
     
     def delete(self, ids=None, filter_dict=None):
         # 從 Chroma 刪除向量
         if ids:
-            self.collection.delete(ids=ids)
-            return {"deleted": len(ids)}
-        elif filter_dict:
-            # 獲取匹配的 ID
-            results = self.collection.get(where=filter_dict)
-            if results and 'ids' in results:
-                ids_to_delete = results['ids']
-                if ids_to_delete:
-                    self.collection.delete(ids=ids_to_delete)
-                    return {"deleted": len(ids_to_delete)}
+            try:
+                logger.info(f"通過 ID 列表刪除: {ids}")
+                self.collection.delete(ids=ids)
+                return {"deleted": len(ids)}
+            except Exception as e:
+                logger.error(f"通過 ID 列表刪除失敗: {str(e)}")
+                return {"deleted": 0, "error": str(e)}
         
+        elif filter_dict:
+            logger.info(f"嘗試通過過濾條件刪除: {filter_dict}")
+            deleted_count = 0
+            
+            try:
+                # 方法 1: 使用 where 條件獲取 ID 後刪除
+                chroma_where = {}
+                
+                # 處理 user_id
+                if 'user_id' in filter_dict:
+                    chroma_where["user_id"] = {"$eq": filter_dict["user_id"]}
+                
+                # 處理 document_id
+                if 'document_id' in filter_dict:
+                    chroma_where["document_id"] = {"$eq": filter_dict["document_id"]}
+                
+                logger.info(f"使用 Chroma where 條件: {chroma_where}")
+                
+                # 獲取匹配的文檔
+                results = self.collection.get(where=chroma_where)
+                
+                if results and 'ids' in results and results['ids']:
+                    ids_to_delete = results['ids']
+                    logger.info(f"找到要刪除的 ID: {ids_to_delete}")
+                    
+                    if ids_to_delete:
+                        self.collection.delete(ids=ids_to_delete)
+                        deleted_count = len(ids_to_delete)
+                        logger.info(f"成功刪除 {deleted_count} 個向量")
+                        return {"deleted": deleted_count}
+                else:
+                    logger.warning("未找到匹配的文檔")
+            
+            except Exception as e:
+                logger.error(f"方法 1 刪除失敗: {str(e)}")
+            
+            # 如果方法 1 失敗，嘗試方法 2
+            if deleted_count == 0:
+                try:
+                    logger.info("嘗試方法 2: 使用查詢獲取所有文檔")
+                    # 使用查詢方法獲取所有文檔
+                    dummy_vector = [0.0] * DIMENSION
+                    all_results = self.collection.query(
+                        query_embeddings=[dummy_vector],
+                        n_results=10000,
+                        include_metadata=True
+                    )
+                    
+                    if all_results and 'ids' in all_results and len(all_results['ids']) > 0:
+                        # 過濾匹配條件的 ID
+                        ids_to_delete = []
+                        
+                        for i, metadata in enumerate(all_results['metadatas'][0]):
+                            matches_all = True
+                            for key, value in filter_dict.items():
+                                if key not in metadata or metadata[key] != value:
+                                    matches_all = False
+                                    break
+                            
+                            if matches_all:
+                                ids_to_delete.append(all_results['ids'][0][i])
+                        
+                        logger.info(f"方法 2 找到要刪除的 ID: {ids_to_delete}")
+                        
+                        if ids_to_delete:
+                            self.collection.delete(ids=ids_to_delete)
+                            deleted_count = len(ids_to_delete)
+                            logger.info(f"方法 2 成功刪除 {deleted_count} 個向量")
+                            return {"deleted": deleted_count}
+                    else:
+                        logger.warning("方法 2 未找到匹配的文檔")
+                
+                except Exception as inner_e:
+                    logger.error(f"方法 2 刪除失敗: {str(inner_e)}")
+            
+            # 如果方法 2 也失敗，嘗試方法 3
+            if deleted_count == 0:
+                try:
+                    logger.info("嘗試方法 3: 直接使用 where 參數刪除")
+                    # 直接使用 where 參數刪除
+                    self.collection.delete(where=chroma_where)
+                    logger.info("方法 3 刪除操作已執行")
+                    # 由於無法確定刪除了多少項，返回一個估計值
+                    return {"deleted": 1, "method": "direct_where"}
+                except Exception as e3:
+                    logger.error(f"方法 3 刪除失敗: {str(e3)}")
+        
+        logger.warning("所有刪除方法都失敗")
         return {"deleted": 0}
     
     def get_documents(self, filter_dict=None):
         # 獲取匹配篩選條件的文檔
-        results = self.collection.get(where=filter_dict)
-        
-        # 格式化結果以匹配 Pinecone 的輸出格式
-        matches = []
-        if results and 'ids' in results:
-            for i in range(len(results['ids'])):
-                match = {
-                    'id': results['ids'][i],
-                    'metadata': results['metadatas'][i] if 'metadatas' in results else {}
-                }
-                matches.append(match)
-        
-        return {"matches": matches}
+        try:
+            # Chroma 需要特定格式的 where 條件
+            chroma_where = {}
+            
+            if filter_dict:
+                # 處理 user_id
+                if 'user_id' in filter_dict:
+                    chroma_where["user_id"] = {"$eq": filter_dict["user_id"]}
+                
+                # 處理 document_id
+                if 'document_id' in filter_dict:
+                    chroma_where["document_id"] = {"$eq": filter_dict["document_id"]}
+                
+                # 處理 is_encrypted
+                if 'is_encrypted' in filter_dict:
+                    chroma_where["is_encrypted"] = {"$eq": filter_dict["is_encrypted"]}
+            
+            # 獲取匹配的文檔
+            results = self.collection.get(where=chroma_where if chroma_where else None)
+            
+            # 格式化結果以匹配 Pinecone 的輸出格式
+            matches = []
+            if results and 'ids' in results:
+                for i in range(len(results['ids'])):
+                    match = {
+                        'id': results['ids'][i],
+                        'metadata': results['metadatas'][i] if 'metadatas' in results else {}
+                    }
+                    matches.append(match)
+            
+            return {"matches": matches}
+            
+        except Exception as e:
+            logger.error(f"Chroma 獲取文檔時出錯: {str(e)}")
+            # 嘗試使用備用方法
+            try:
+                # 使用查詢方法獲取所有文檔
+                dummy_vector = [0.0] * DIMENSION
+                all_results = self.collection.query(
+                    query_embeddings=[dummy_vector],
+                    n_results=10000,
+                    include_metadata=True
+                )
+                
+                matches = []
+                if all_results and 'ids' in all_results and len(all_results['ids']) > 0:
+                    for i, metadata in enumerate(all_results['metadatas'][0]):
+                        # 檢查是否匹配過濾條件
+                        if filter_dict:
+                            matches_all = True
+                            for key, value in filter_dict.items():
+                                if key not in metadata or metadata[key] != value:
+                                    matches_all = False
+                                    break
+                            
+                            if not matches_all:
+                                continue
+                        
+                        match = {
+                            'id': all_results['ids'][0][i],
+                            'metadata': metadata
+                        }
+                        matches.append(match)
+                
+                return {"matches": matches}
+            except Exception as inner_e:
+                logger.error(f"備用獲取文檔方法失敗: {str(inner_e)}")
+                return {"matches": []}
 
 # 向量資料庫工廠
 class VectorDBFactory:
@@ -464,9 +627,10 @@ def upload_file():
         vector_db = VectorDBFactory.get_db(db_type)
         
         # 保存檔案
-        filename = secure_filename(file.filename)
+        original_filename = file.filename
+        safe_filename = secure_filename(file.filename)
         document_id = str(uuid.uuid4())
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{document_id}_{filename}")
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{document_id}_{safe_filename}")
         file.save(file_path)
         
         # 提取文字
@@ -488,7 +652,8 @@ def upload_file():
                 'id': chunk_id,
                 'document_id': document_id,
                 'chunk_index': i,
-                'filename': filename,
+                'filename': original_filename,
+                'safe_filename': safe_filename,
                 'user_id': user_id,
                 'timestamp': datetime.now().isoformat()
             }
@@ -618,13 +783,44 @@ def get_documents():
     if not user_id:
         return jsonify({"error": "必須提供用戶 ID"}), 400
     
+    logger.info(f"獲取文檔列表: user_id={user_id}, db_type={db_type}")
+    
     try:
         # 獲取向量資料庫實例
         vector_db = VectorDBFactory.get_db(db_type)
         
         # 搜索匹配用戶 ID 的文檔
         filter_dict = {"user_id": user_id}
-        results = vector_db.get_documents(filter_dict)
+        
+        # 對於 Chroma，使用特定的查詢方式
+        if db_type == 'chroma':
+            try:
+                # 使用特定格式的 where 條件
+                chroma_where = {"user_id": {"$eq": user_id}}
+                
+                # 直接使用 ChromaVectorDB 實例以獲取更多控制
+                chroma_db = vector_db
+                results = chroma_db.collection.get(where=chroma_where)
+                
+                # 格式化結果
+                matches = []
+                if results and 'ids' in results:
+                    for i in range(len(results['ids'])):
+                        match = {
+                            'id': results['ids'][i],
+                            'metadata': results['metadatas'][i] if 'metadatas' in results else {}
+                        }
+                        matches.append(match)
+                
+                results = {"matches": matches}
+                logger.info(f"Chroma 直接查詢找到 {len(matches)} 個向量")
+            except Exception as e:
+                logger.error(f"Chroma 直接查詢失敗: {str(e)}")
+                # 如果直接查詢失敗，使用標準方法
+                results = vector_db.get_documents(filter_dict)
+        else:
+            # 對於其他資料庫類型，使用標準方法
+            results = vector_db.get_documents(filter_dict)
         
         # 提取唯一文檔
         documents = {}
@@ -639,6 +835,20 @@ def get_documents():
                     'timestamp': metadata.get('timestamp', datetime.now().isoformat()),
                     'db_type': db_type
                 }
+        
+        logger.info(f"找到 {len(documents)} 個唯一文檔")
+        
+        # 強制 Chroma 持久化更改
+        if db_type == 'chroma':
+            try:
+                # 嘗試獲取 Chroma 客戶端並持久化
+                chroma_db = vector_db
+                # 某些版本的 Chroma 可能需要顯式持久化
+                if hasattr(chroma_db.client, 'persist'):
+                    chroma_db.client.persist()
+                    logger.info("已強制 Chroma 持久化更改")
+            except Exception as e:
+                logger.error(f"Chroma 持久化失敗: {str(e)}")
         
         return jsonify({
             "documents": list(documents.values())
@@ -660,26 +870,76 @@ def delete_document(document_id):
         # 獲取向量資料庫實例
         vector_db = VectorDBFactory.get_db(db_type)
         
+        # 記錄刪除操作開始
+        logger.info(f"開始刪除文檔: document_id={document_id}, user_id={user_id}, db_type={db_type}")
+        
         # 刪除匹配的文檔
         filter_dict = {
             "user_id": user_id,
             "document_id": document_id
         }
         
-        delete_result = vector_db.delete(filter_dict=filter_dict)
+        # 首先嘗試獲取要刪除的文檔，確認它存在
+        if db_type == 'chroma':
+            # 對於 Chroma，使用特定格式的 where 條件
+            chroma_where = {
+                "user_id": {"$eq": user_id},
+                "document_id": {"$eq": document_id}
+            }
+            
+            try:
+                # 直接使用 ChromaVectorDB 實例以獲取更多控制
+                chroma_db = vector_db
+                results = chroma_db.collection.get(where=chroma_where)
+                
+                if results and 'ids' in results and results['ids']:
+                    logger.info(f"找到要刪除的文檔: {len(results['ids'])} 個向量")
+                    
+                    # 直接使用 ID 列表刪除
+                    ids_to_delete = results['ids']
+                    chroma_db.collection.delete(ids=ids_to_delete)
+                    logger.info(f"已刪除 {len(ids_to_delete)} 個向量")
+                    delete_result = {"deleted": len(ids_to_delete)}
+                else:
+                    logger.warning(f"未找到要刪除的文檔: document_id={document_id}")
+                    delete_result = {"deleted": 0}
+            except Exception as e:
+                logger.error(f"Chroma 刪除操作失敗: {str(e)}")
+                # 嘗試使用標準方法
+                delete_result = vector_db.delete(filter_dict=filter_dict)
+        else:
+            # 對於其他資料庫類型，使用標準方法
+            delete_result = vector_db.delete(filter_dict=filter_dict)
         
         # 也刪除上傳的文件（如果存在）
         delete_count = 0
         for filename in os.listdir(app.config['UPLOAD_FOLDER']):
             if filename.startswith(f"{document_id}_"):
-                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                os.remove(file_path)
+                logger.info(f"已刪除文件: {file_path}")
                 delete_count += 1
+        
+        # 強制 Chroma 持久化更改
+        if db_type == 'chroma':
+            try:
+                # 嘗試獲取 Chroma 客戶端並持久化
+                chroma_db = vector_db
+                # 某些版本的 Chroma 可能需要顯式持久化
+                if hasattr(chroma_db.client, 'persist'):
+                    chroma_db.client.persist()
+                    logger.info("已強制 Chroma 持久化更改")
+            except Exception as e:
+                logger.error(f"Chroma 持久化失敗: {str(e)}")
+        
+        # 記錄刪除操作完成
+        logger.info(f"文檔刪除完成: document_id={document_id}, 刪除了 {delete_result.get('deleted', 0)} 個向量和 {delete_count} 個文件")
         
         return jsonify({
             "message": "文檔已成功刪除",
             "document_id": document_id,
             "files_deleted": delete_count,
-            "vectors_deleted": delete_result.get("deleted", "unknown")
+            "vectors_deleted": delete_result.get("deleted", 0)
         })
         
     except Exception as e:
